@@ -1,4 +1,4 @@
-package com.optimagrowth.license.service;
+/*package com.optimagrowth.license.service;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -33,4 +33,4 @@ public class OrganizationServiceFeignTesterRunner {
             }
         };
     }
-}
+}*/
