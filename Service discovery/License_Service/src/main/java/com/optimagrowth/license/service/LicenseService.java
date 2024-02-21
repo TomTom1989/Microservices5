@@ -1,7 +1,16 @@
 package com.optimagrowth.license.service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.TimeoutException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.optimagrowth.license.utils.UserContextHolder;
+
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
@@ -15,8 +24,15 @@ import com.optimagrowth.license.service.client.OrganizationDiscoveryClient;
 import com.optimagrowth.license.service.client.OrganizationFeignClient;
 import com.optimagrowth.license.service.client.OrganizationRestTemplateClient;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead.Type;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+
 @Service
 public class LicenseService {
+	
+	
 
 	@Autowired
 	MessageSource messages;
@@ -35,6 +51,8 @@ public class LicenseService {
 
 	@Autowired
 	OrganizationDiscoveryClient organizationDiscoveryClient;
+	
+	private static final Logger logger = LoggerFactory.getLogger(LicenseService.class);
 
 	public License getLicense(String licenseId, String organizationId, String clientType){
 		License license = licenseRepository.findByOrganizationIdAndLicenseId(organizationId, licenseId);
@@ -99,8 +117,38 @@ public class LicenseService {
 		return responseMessage;
 
 	}
-
-	public List<License> getLicensesByOrganization(String organizationId) {
-		return licenseRepository.findByOrganizationId(organizationId);
+	
+	private void randomlyRunLong() throws TimeoutException{
+		Random rand = new Random();
+		int randomNum = rand.nextInt((3 - 1) + 1) + 1;
+		if (randomNum==3) sleep();
 	}
+	private void sleep() throws TimeoutException{
+		try {
+			System.out.println("Sleep");
+			Thread.sleep(25000);
+			throw new java.util.concurrent.TimeoutException();
+		} catch (InterruptedException e) {
+			logger.error(e.getMessage());
+		}
+	}
+	private List<License> buildFallbackLicenseList(String organizationId, Throwable t){
+		List<License> fallbackList = new ArrayList<>();
+		License license = new License();
+		license.setLicenseId("0000000-00-00000");
+		license.setOrganizationId(organizationId);
+		license.setProductName("Sorry no licensing information currently available");
+		fallbackList.add(license);
+		return fallbackList;
+	}
+	
+
+	@CircuitBreaker(name= "licenseService",fallbackMethod= "buildFallbackLicenseList")
+	@Retry(name = "retryLicenseService", fallbackMethod = "buildFallbackLicenseList")
+	@Bulkhead(name = "bulkheadLicenseService", type= Type.THREADPOOL, fallbackMethod = "buildFallbackLicenseList")
+			public List<License> getLicensesByOrganization(String organizationId) throws TimeoutException {
+			 logger.debug("getLicensesByOrganization Correlation id: {}", UserContextHolder.getContext().getCorrelationId());
+			 randomlyRunLong();
+			 return licenseRepository.findByOrganizationId(organizationId);
+			}
 }

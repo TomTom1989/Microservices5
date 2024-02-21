@@ -1,14 +1,62 @@
 spring:
-   application:
-       name: licensing-service 
-   profiles:
-       active: dev
-   cloud:
-       config: 
-          uri: http://configserver:8071
-          
+  application:
+    name: licensing-service 
+  profiles:
+    active: dev
+  cloud:
+    config: 
+      uri: http://localhost:8071
+
 logging:
   level:
     com.netflix: WARN
     org.springframework.web: WARN
     com.optimagrowth: DEBUG
+
+resilience4j.circuitbreaker:
+  instances:
+    licenseService:
+      registerHealthIndicator: true
+      slidingWindowSize: 10
+      minimumNumberOfCalls: 5
+      waitDurationInOpenState: 10s
+      failureRateThreshold: 50
+      recordExceptions:
+        - org.springframework.web.client.HttpServerErrorException
+        - java.io.IOException
+        - java.util.concurrent.TimeoutException
+        - org.springframework.web.client.ResourceAccessException
+    organizationService:
+      registerHealthIndicator: true
+      slidingWindowSize: 10
+      minimumNumberOfCalls: 5
+      waitDurationInOpenState: 20s
+      failureRateThreshold: 60
+
+resilience4j.ratelimiter:
+  instances:
+    licenseService:
+      limitForPeriod: 5
+      limitRefreshPeriod: 5s
+      timeoutDuration: 1s
+
+resilience4j.retry:
+  instances:
+    retryLicenseService:
+      maxAttempts: 5
+      waitDuration: 10s
+      retryExceptions:
+        - java.util.concurrent.TimeoutException
+
+resilience4j.bulkhead:
+  instances:
+    bulkheadLicenseService:
+      maxConcurrentCalls: 20
+      maxWaitDuration: 0ms
+
+resilience4j.thread-pool-bulkhead:
+  instances:
+    bulkheadLicenseService:
+      maxThreadPoolSize: 1
+      coreThreadPoolSize: 1
+      queueCapacity: 1

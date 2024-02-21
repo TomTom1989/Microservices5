@@ -1,2 +1,4 @@
-
-
+logging:
+  level:
+     org.springframework.web: WARN
+     com.optimagrowth: DEBUG
